@@ -18,7 +18,6 @@
              ,@body)))))
 
 ;;; TODO: We've got plenty of room for optimizations here.  Ideas:
-;;; * [ ] Don't test invariants if unspecified
 ;;; * [ ] Don't track rollbacks if unspecified
 ;;; * [ ] Don't run using if unspecified
 ;;; * [ ] Avoid saving return values if with-step is in a null context (e.g., not the last element within a progn) -- can we even detect this? :/
@@ -36,19 +35,19 @@
         ;; FIXME: I hate the name sanity, but what's better?  requiring?  assuring?  positing?
         ;; Hrm... "positing X, ensure Y using Z"
         ;; "ensure X using Y, requiring Z"
-        (invariant (or (assocdr 'sanity body) '(t)))
+        (invariant (assocdr 'sanity body))
         (rollback (assocdr 'rollback body)))
     (with-unique-names (ensure-fn using-fn invariant-fn rollback-fn)
       (once-only ((return-values nil))
         `(flet ((,ensure-fn    () ,@ensure)
                 (,using-fn     () (avoid-errors ,@using))
-                (,invariant-fn () ,@invariant)
+                ,@(when invariant `((,invariant-fn () ,@invariant)))
                 (,rollback-fn  () ,@rollback))
-           (%check-invariant #',invariant-fn ,name)
+           ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
            (push #',rollback-fn *task-rollback*)
            (unless (,ensure-fn)
              (setf ,return-values (multiple-value-list (,using-fn)))
-             (%check-invariant #',invariant-fn ,name)
+             ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
              (unless (,ensure-fn)
                (%step-failed ,name)))
            (values-list ,return-values))))))
