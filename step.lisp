@@ -1,8 +1,21 @@
 (in-package #:guarded-commands)
 
+(defvar *debug* nil "Set to t allow errors within USING forms to trigger the debugger.")
+
 ;; I already require Alexandria, so what's my motivation for avoiding assoc-value?
 (defun assocdr (item alist)
   (cdr (assoc item alist)))
+
+;; ignore-errors-like functionality, but allows earlier handlers to run first
+(defmacro avoid-errors (&body body)
+  (if *debug*
+      `(progn ,@body)
+      (with-unique-names (block)
+        `(block ,block
+           (handler-bind ((error (lambda (c)
+                                   (signal c)
+                                   (return-from ,block (values nil c)))))
+             ,@body)))))
 
 ;;; TODO: We've got plenty of room for optimizations here.  Ideas:
 ;;; * [ ] Don't test invariants if unspecified
@@ -27,8 +40,7 @@
     (with-unique-names (ensure-fn using-fn invariant-fn rollback-fn)
       (once-only ((return-values nil))
         `(flet ((,ensure-fn    () ,@ensure)
-                ;; FIXME: maybe instead of ignore-errors, we should do some magic with *debugger-hook* to allow programs to handle errors if they want, but ignoring errors otherwise (the Perl library ignores errors, but CL has much richer options).
-                (,using-fn     () (ignore-errors ,@using))
+                (,using-fn     () (avoid-errors ,@using))
                 (,invariant-fn () ,@invariant)
                 (,rollback-fn  () ,@rollback))
            (%check-invariant #',invariant-fn ,name)

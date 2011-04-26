@@ -56,3 +56,13 @@
              (setf a t)))))
 
 #+(or) (task-3)
+
+(define-task task-4 ()
+  (let ((a nil))
+    (handler-bind ((error #'continue))
+      (with-step "testing errors"
+        (ensure a)
+        (using (cerror "continue to complete step" nil)
+               (setf a t))))))
+
+#+(or) (task-4)
