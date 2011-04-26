@@ -18,7 +18,6 @@
              ,@body)))))
 
 ;;; TODO: We've got plenty of room for optimizations here.  Ideas:
-;;; * [ ] Don't track rollbacks if unspecified
 ;;; * [ ] Don't run using if unspecified
 ;;; * [ ] Avoid saving return values if with-step is in a null context (e.g., not the last element within a progn) -- can we even detect this? :/
 
@@ -42,9 +41,9 @@
         `(flet ((,ensure-fn    () ,@ensure)
                 (,using-fn     () (avoid-errors ,@using))
                 ,@(when invariant `((,invariant-fn () ,@invariant)))
-                (,rollback-fn  () ,@rollback))
+                ,@(when rollback  `((,rollback-fn  () ,@rollback))))
            ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
-           (push #',rollback-fn *task-rollback*)
+           ,@(when rollback `((push #',rollback-fn *task-rollback*)))
            (unless (,ensure-fn)
              (setf ,return-values (multiple-value-list (,using-fn)))
              ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
