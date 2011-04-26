@@ -30,7 +30,8 @@
   (using <body>) defines code to be run to make the ensure block return true.
   (sanity <condition>) defines an invariant condition.  If defined, it is run before ensure and after using are run, and if it returns false will signal a condition of type ?.
   (rollback <body>) defines rollback code for this step.  If this step, or any step after it in the task, fails the rollback will be run."
-  (let ((ensure (or (assocdr 'ensure body) '((%syntax-error "Unable to perform step ~A without an ensure condition." name))))
+  (let ((ensure (or (assocdr 'ensure body)
+                    (%syntax-error "Step ~S is missing the required ENSURE condition." name)))
         (using (assocdr 'using body))
         ;; FIXME: I hate the name sanity, but what's better?  requiring?  assuring?  positing?
         ;; Hrm... "positing X, ensure Y using Z"
