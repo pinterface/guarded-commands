@@ -18,7 +18,6 @@
              ,@body)))))
 
 ;;; TODO: We've got plenty of room for optimizations here.  Ideas:
-;;; * [ ] Don't run using if unspecified
 ;;; * [ ] Avoid saving return values if with-step is in a null context (e.g., not the last element within a progn) -- can we even detect this? :/
 
 ;; I'd like to call this "STEP", but that would conflict with a very different CL:STEP.
@@ -39,17 +38,20 @@
     (with-unique-names (ensure-fn using-fn invariant-fn rollback-fn)
       (once-only ((return-values nil))
         `(flet ((,ensure-fn    () ,@ensure)
-                (,using-fn     () (avoid-errors ,@using))
+                ,@(when using     `((,using-fn     () (avoid-errors ,@using))))
                 ,@(when invariant `((,invariant-fn () ,@invariant)))
                 ,@(when rollback  `((,rollback-fn  () ,@rollback))))
            ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
            ,@(when rollback `((push #',rollback-fn *task-rollback*)))
-           (unless (,ensure-fn)
-             (setf ,return-values (multiple-value-list (,using-fn)))
-             ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
-             (unless (,ensure-fn)
-               (%step-failed ,name)))
-           (values-list ,return-values))))))
+           ,@(if using
+                 `((unless (,ensure-fn)
+                     (setf ,return-values (multiple-value-list (,using-fn)))
+                     ,@(when invariant `((%check-invariant #',invariant-fn ,name)))
+                     (unless (,ensure-fn)
+                       (%step-failed ,name)))
+                   (values-list ,return-values))
+                 `((unless (,ensure-fn)
+                     (%step-failed ,name)))))))))
 
 (defun %check-invariant (invariant-fn step-name)
   (unless (funcall invariant-fn)
