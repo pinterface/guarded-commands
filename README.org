@@ -1,0 +1,88 @@
+#+TITLE: guarded-commands Notes
+* What it Is
+guarded-commands is a Common Lisp port of my favourite Perl module,
+[[http://search.cpan.org/~trey/Commands-Guarded/lib/Commands/Guarded.pm][Commands::Guarded]].  As its inspiration says, "Better scripts through guarded
+commands.".
+* Usage
+: (let ((a 0))
+:   (with-task
+:     (with-step "something"
+:       (ensure (= a 1))
+:       (using (setf a 1)))))
+* Tasks
+A task is a collection of steps working towards a specific goal.
+ * DEFINE-TASK name args &body :: Creates a function which performs a task.
+ * WITH-TASK &body :: Creates an unnamed task.  Basically a progn, but with
+                      appropriate wrappers for rolling back steps and so forth.
+* Steps
+A step accomplishes something.  Generally, it accomplishes one thing.
+ * WITH-STEP name (step-part &body)+ :: A step.  May be nested.
+** Parts of a Step
+Each step is broken up into several declarative pieces:
+ * ENSURE :: Defines a condition which checks that a step has completed
+             successfully, or does not need to be run.  If ENSURE is false, the
+             USING block will be run; if USING has already been run, an error
+             will be signalled.
+ * USING :: Defines code to affect the ENSURE condition.  Will not be run if
+            ENSURE is already true.  USING supresses the interactive debugger
+            (like =ignore-errors=, except condition handlers outside of the
+            USING block may still be run) unless =guarded-commands::*debug*= is
+            true.
+ * SANITY :: Defines an invariant condition, which must be true both before and
+             after this step has run.  It is checked before ENSURE, and after
+             USING.
+ * ROLLBACK :: Defines code to revert this step.  If this step fails—or any step
+               after it within the task, for that matter—the rollback will be
+               run.  Rollbacks are run in LIFO order.
+               *Warning:* A non-local exit from within a rollback will cause the
+               remaining rollbacks to be aborted.
+ENSURE is required, all others are optional.
+* Differences from Commands::Guarded
+ * steps should be grouped within a =define-task= or =with-task=.  The -task
+   forms are what provide the rollback functionality.
+ * USING blocks prevent errors from hitting the debugger.  C::G makes no attempt
+   to shield you from an error in USING aborting your program, which seems to me
+   to be somewhat contrary to its goals.  Debugger avoidance is coded
+   specifically to allow HANDLER-BIND and friends work fine.  See also
+   =guarded-commands::*debug*=, which is a macroexpansion-time option to allow
+   hitting the interactive debugger.
+ * STEPs are not objects, and can not be collected and called later.
+ * STEP is called WITH-STEP in guarded-commands to avoid conflicting with
+   CL:STEP.
+* Commands::Guarded Notes                                          :noexport:
+Stuff in C::G:
+ * step <name>
+ * ensure <condition>
+   The condition to determine whether the step needs to be
+   performed, and if it successfully completed.
+ * using <body>
+   The code that performs the step.
+ * sanity <condition>
+   An invariant that should be true both before the step is
+   executed (before ensure, actually), and after it completes.
+ * rollback <body>
+   Code to reset things if this step, or any subsequent step,
+   fails.
+ * clear-rollbacks ?
+   Clears the list of rollbacks to be performed.  May not be
+   neccessary, if we can group things with a macro or whatever.
+Useful utilities provided by C::G:
+ * fgrep <regexp> <file>
+   Returns true if <file> has a line matching <regexp>.
+ * readf / writef / appendf
+
+** Examples
+(step "create directory"
+  (ensure (probe-file dir))
+  (using (create-directory dir)))
+=> something like =>
+(flet ((#:ensure-132 () (probe-file dir)))
+  (unless (#:ensure-132)
+    (ignore-errors (create-directory dir)))
+  (unless (#:ensure-132)
+    (error "step ~a failed!" "create directory")))
+
+(step "retarget symlink"
+  (ensure (string= dest (read-symlink file))
+  (using (create-symlink file dest))
+  (rollback (create-symlink file orig-dest))))
